@@ -40,6 +40,11 @@ function logCaptureContext(
   })
 }
 
+// Check if this is a scrollable document (vs presentation with slides)
+function isScrollableDocument(): boolean {
+  return document.body.classList.contains("vertical")
+}
+
 // Get current page number from DocSend UI
 function getCurrentPageNumber(): number {
   const pageNumber = document.querySelector("#page-number")
@@ -399,6 +404,183 @@ async function navigateToNextPage(): Promise<boolean> {
   return false
 }
 
+// Capture scrollable document by extracting images from DOM
+async function captureScrollableDocument(): Promise<string[]> {
+  logCaptureContext("Starting scrollable document capture")
+
+  // Try multiple selectors to find page images
+  const selectors = [
+    "img.preso-view.page-view[data-pagenum]",
+    "img.page-view[data-pagenum]",
+    "img.preso-view[data-pagenum]",
+    ".item img.page-view",
+    ".carousel-inner img.page-view"
+  ]
+
+  let pageImages: HTMLImageElement[] = []
+  for (const selector of selectors) {
+    pageImages = Array.from(
+      document.querySelectorAll(selector)
+    ) as HTMLImageElement[]
+    if (pageImages.length > 0) {
+      logCaptureContext("Found page images with selector", {
+        selector,
+        totalImages: pageImages.length
+      })
+      break
+    }
+  }
+
+  if (pageImages.length === 0) {
+    logCaptureContext("No page images found in DOM with any selector")
+    return []
+  }
+
+  // Log details about each image for debugging
+  logCaptureContext("Image details before loading", {
+    images: pageImages.map((img, i) => ({
+      index: i,
+      pageNum: img.getAttribute("data-pagenum"),
+      src: img.src?.substring(0, 80) + "...",
+      complete: img.complete,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+      hasWhitey: img.src?.includes("whitey")
+    }))
+  })
+
+  // Scroll through the document to trigger lazy loading if needed
+  logCaptureContext("Scrolling to trigger lazy loading...")
+  const carouselContainer = document.querySelector(
+    ".carousel-inner, .js-carousel-inner"
+  ) as HTMLElement
+  if (carouselContainer) {
+    // Scroll to bottom to ensure all images are triggered
+    carouselContainer.scrollTop = carouselContainer.scrollHeight
+    await sleep(500)
+    // Scroll back to top
+    carouselContainer.scrollTop = 0
+    await sleep(500)
+  }
+
+  // Wait for all images to load
+  logCaptureContext("Waiting for all images to load...")
+  await Promise.all(
+    pageImages.map((img, index) => {
+      if (img.complete && img.naturalWidth > 0) {
+        logCaptureContext(`Image ${index + 1} already loaded`)
+        return Promise.resolve()
+      }
+      return new Promise<void>((resolve) => {
+        const onLoad = () => {
+          logCaptureContext(`Image ${index + 1} loaded successfully`)
+          resolve()
+        }
+        const onError = () => {
+          logCaptureContext(`Image ${index + 1} failed to load`)
+          resolve()
+        }
+        img.addEventListener("load", onLoad)
+        img.addEventListener("error", onError)
+
+        // Timeout after 15 seconds per image
+        setTimeout(() => {
+          logCaptureContext(`Image ${index + 1} load timeout`)
+          resolve()
+        }, 15000)
+      })
+    })
+  )
+
+  // Filter out unloaded or error images
+  const loadedImages = pageImages.filter(
+    (img) => img.complete && img.naturalWidth > 0 && !img.src.includes("whitey")
+  )
+
+  logCaptureContext("Images ready to capture", {
+    loadedCount: loadedImages.length,
+    totalCount: pageImages.length,
+    loadedDetails: loadedImages.map((img) => ({
+      pageNum: img.getAttribute("data-pagenum"),
+      width: img.naturalWidth,
+      height: img.naturalHeight
+    }))
+  })
+
+  if (loadedImages.length === 0) {
+    logCaptureContext("No valid images to capture - detailed state", {
+      allImages: pageImages.map((img) => ({
+        pageNum: img.getAttribute("data-pagenum"),
+        complete: img.complete,
+        naturalWidth: img.naturalWidth,
+        src: img.src?.substring(0, 100)
+      }))
+    })
+    return []
+  }
+
+  // Scroll to each image and capture it via screenshot
+  const screenshots: string[] = []
+  const carousel = document.querySelector(
+    ".carousel-inner, .js-carousel-inner"
+  ) as HTMLElement
+
+  for (let i = 0; i < loadedImages.length; i++) {
+    const img = loadedImages[i]
+    const pageNum = img.getAttribute("data-pagenum") || (i + 1).toString()
+
+    try {
+      // Scroll the image into view
+      if (carousel) {
+        // Find the parent .item container
+        const itemContainer = img.closest(".item") as HTMLElement
+        if (itemContainer) {
+          // Scroll to show this item
+          itemContainer.scrollIntoView({ behavior: "instant", block: "start" })
+          await sleep(300) // Wait for scroll to complete
+        }
+      } else {
+        img.scrollIntoView({ behavior: "instant", block: "start" })
+        await sleep(300)
+      }
+
+      // Capture screenshot using background script
+      const screenshot = await captureScreenshot()
+
+      if (screenshot) {
+        screenshots.push(screenshot)
+
+        logCaptureContext("Captured page from DOM", {
+          pageNum,
+          capturedCount: screenshots.length,
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        })
+
+        // Update progress
+        captureState.currentPage = parseInt(pageNum, 10)
+        captureState.capturedCount = screenshots.length
+        sendStatusUpdate()
+      } else {
+        logCaptureContext("Failed to capture screenshot for page", {
+          pageNum
+        })
+      }
+    } catch (error) {
+      logCaptureContext("Error capturing page from DOM", {
+        pageNum,
+        error: error instanceof Error ? error.message : error
+      })
+    }
+  }
+
+  logCaptureContext("Scrollable document capture complete", {
+    capturedCount: screenshots.length
+  })
+
+  return screenshots
+}
+
 // Capture screenshot via background script
 async function captureScreenshot(): Promise<string | null> {
   return new Promise((resolve) => {
@@ -483,6 +665,85 @@ async function startCapture() {
   captureState.totalPages = detectedTotalPages
   captureState.screenshots = []
   captureState.zoomAdjusted = false
+
+  // Check if this is a scrollable document
+  const isVertical = isScrollableDocument()
+  logCaptureContext("Document type detected", {
+    isScrollable: isVertical,
+    totalPages: detectedTotalPages
+  })
+
+  // Branch based on document type
+  if (isVertical) {
+    // Scrollable document: capture images directly from DOM
+    logCaptureContext("Using scrollable document capture method")
+
+    try {
+      captureState.isCapturing = true
+      captureState.currentPage = 1
+      sendStatusUpdate()
+
+      const screenshots = await captureScrollableDocument()
+
+      if (screenshots.length === 0) {
+        logCaptureContext("No images captured from scrollable document")
+        failCapture(
+          "Flow couldn't load the document images. Please wait for the document to fully load and try again."
+        )
+        return
+      }
+
+      captureState.screenshots = screenshots
+      captureState.capturedCount = screenshots.length
+
+      // Upload screenshots
+      if (captureState.screenshots.length > 0) {
+        logCaptureContext("Sending UPLOAD_SCREENSHOTS message", {
+          screenshotCount: captureState.screenshots.length
+        })
+        chrome.runtime.sendMessage(
+          {
+            type: "UPLOAD_SCREENSHOTS",
+            screenshots: captureState.screenshots,
+            metadata: {
+              url: window.location.href,
+              totalPages: captureState.screenshots.length,
+              capturedAt: new Date().toISOString()
+            }
+          },
+          (response) => {
+            logCaptureContext("UPLOAD_SCREENSHOTS response received", {
+              response
+            })
+          }
+        )
+      }
+
+      captureState.isCapturing = false
+      sendStatusUpdate()
+
+      // Reset after a delay to allow success message to show
+      setTimeout(() => {
+        captureState.currentPage = 0
+        captureState.capturedCount = 0
+      }, 3500)
+
+      return
+    } catch (error) {
+      logCaptureContext("Scrollable document capture error", {
+        error: error instanceof Error ? error.message : error
+      })
+      failCapture(
+        error instanceof Error
+          ? error.message
+          : "Failed to capture scrollable document"
+      )
+      return
+    }
+  }
+
+  // Presentation mode: use existing navigation-based capture
+  logCaptureContext("Using presentation capture method (with navigation)")
 
   const zoomResult = await ensureDefaultZoom()
   if (!zoomResult.success) {
