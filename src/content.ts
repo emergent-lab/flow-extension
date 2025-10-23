@@ -480,8 +480,8 @@ async function captureScrollableDocument(): Promise<string[]> {
           logCaptureContext(`Image ${index + 1} failed to load`)
           resolve()
         }
-        img.addEventListener("load", onLoad)
-        img.addEventListener("error", onError)
+        img.addEventListener("load", onLoad, { once: true })
+        img.addEventListener("error", onError, { once: true })
 
         // Timeout after 15 seconds per image
         setTimeout(() => {
@@ -526,6 +526,15 @@ async function captureScrollableDocument(): Promise<string[]> {
   ) as HTMLElement
 
   for (let i = 0; i < loadedImages.length; i++) {
+    // Check if capture was cancelled
+    if (!captureState.isCapturing) {
+      logCaptureContext("Capture cancelled during scrollable document loop", {
+        capturedCount: screenshots.length,
+        totalImages: loadedImages.length
+      })
+      break
+    }
+
     const img = loadedImages[i]
     const pageNum = img.getAttribute("data-pagenum") || (i + 1).toString()
 
@@ -696,8 +705,8 @@ async function startCapture() {
       captureState.screenshots = screenshots
       captureState.capturedCount = screenshots.length
 
-      // Upload screenshots
-      if (captureState.screenshots.length > 0) {
+      // Upload screenshots (only if capture wasn't cancelled)
+      if (captureState.isCapturing && captureState.screenshots.length > 0) {
         logCaptureContext("Sending UPLOAD_SCREENSHOTS message", {
           screenshotCount: captureState.screenshots.length
         })
