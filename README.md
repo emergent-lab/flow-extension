@@ -19,18 +19,14 @@ The Flow browser extension brings DocSend capture tooling and Clerk-backed authe
    - Visit the [GitHub releases page](https://github.com/emergent-lab/flow-extension/releases)
    - Download the latest `flow-extension.zip` file
 
-2. **Extract the archive**
-   - Unzip the downloaded file to a location on your computer
-   - Remember this location as you'll need it for the next step
-
-3. **Load the extension in Chrome**
+2. **Load the extension in Chrome**
    - Open Chrome and navigate to `chrome://extensions`
    - Enable "Developer mode" using the toggle in the top-right corner
    - Click "Load unpacked"
    - Select the extracted extension directory
    - The Flow extension should now appear in your extensions list
 
-4. **Pin the extension (optional)**
+3. **Pin the extension (optional)**
    - Click the puzzle piece icon in Chrome's toolbar
    - Find "Flow" and click the pin icon to keep it visible
 
