@@ -1,6 +1,6 @@
 # Flow Browser Extension (Beta)
 
-The Flow browser extension brings DocSend capture tooling and Clerk-backed authentication directly into Chrome. Beta users receive pre-built packages distributed through Flow releases.
+The Flow browser extension enabled DocSend capture directly into your library. Beta users receive pre-built packages distributed through Flow releases.
 
 ## Highlights
 
@@ -35,3 +35,5 @@ The Flow browser extension brings DocSend capture tooling and Clerk-backed authe
 - New releases supersede previous versions
 - To update, download the latest release and repeat the installation steps
 - You can delete old extension directories after updating
+
+Disclaimer: Please make sure document owners are ok with you downloading the docs they send you. 
