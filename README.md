@@ -16,7 +16,7 @@ The Flow browser extension brings DocSend capture tooling and Clerk-backed authe
 ## Installation
 
 1. **Download the latest release**
-   - Visit the [GitHub releases page](https://github.com/emergentlabs/flow-extension/releases)
+   - Visit the [GitHub releases page](https://github.com/emergent-lab/flow-extension/releases)
    - Download the latest `flow-extension.zip` file
 
 2. **Extract the archive**
