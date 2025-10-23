@@ -60,6 +60,6 @@ jobs:
 
       - name: Attach zip to release
         if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: flow-extension.zip
+        run: gh release upload ${{ github.ref_name }} flow-extension.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
