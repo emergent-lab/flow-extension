@@ -1,7 +1,7 @@
 {
   "name": "flow-extension",
   "displayName": "Flow",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "Flow extension",
   "author": "Flow",
   "scripts": {
