@@ -1,0 +1,62 @@
+name: Build Extension Zip
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create production env file
+        run: |
+          cat <<'EOF' > .env.production
+          PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.PLASMO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          CLERK_FRONTEND_API=${{ secrets.CLERK_FRONTEND_API }}
+          PLASMO_PUBLIC_CLERK_SYNC_HOST=${{ secrets.PLASMO_PUBLIC_CLERK_SYNC_HOST }}
+          PLASMO_PUBLIC_FRONTEND_URL=${{ secrets.PLASMO_PUBLIC_FRONTEND_URL }}
+          EOF
+
+      - name: Create chrome env file
+        run: |
+          cat <<'EOF' > .env.chrome
+          CRX_PUBLIC_KEY=${{ secrets.CRX_PUBLIC_KEY }}
+          EOF
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build extension
+        run: pnpm build
+
+      - name: Build package zip
+        run: pnpm package
+
+      - name: Prepare artifact
+        run: mv build/chrome-mv3-prod.zip flow-extension.zip
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flow-extension
+          path: flow-extension.zip
+
+      - name: Attach zip to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: flow-extension.zip
